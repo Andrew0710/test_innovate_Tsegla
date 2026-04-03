@@ -32,6 +32,7 @@ ALLOWED_HOSTS = []
 
 INSTALLED_APPS = [
     "rest_framework",
+    "DeliveryPoint",
     "Warehouse",
     'django.contrib.admin',
     'django.contrib.auth',
