@@ -1,0 +1,27 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@theme {
+  /* Наші кастомні кольори з дизайн-брифу */
+  --color-critical: #EF4444; /* Immediate action required */
+  --color-elevated: #F59E0B; /* Warning, stock running low */
+  --color-stable: #10B981;   /* Operations normal */
+  --color-primary: #6366F1;  /* Brand color */
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
