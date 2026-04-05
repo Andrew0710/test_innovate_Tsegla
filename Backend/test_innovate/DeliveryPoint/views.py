@@ -323,8 +323,17 @@ class OrderViewSet(viewsets.ModelViewSet):
 def login_view(request):
     username = request.data.get('username')
     password = request.data.get('password')
+
+    # Production deploys can miss demo users if DB was initialized without seeding.
+    # If a demo login fails, attempt a one-time bootstrap and retry authentication.
+    demo_usernames = {'dispatcher_demo', 'driver_demo', 'manager_demo'}
     
     user = authenticate(username=username, password=password)
+    if user is None and username in demo_usernames:
+        from .bootstrap import ensure_demo_data
+
+        ensure_demo_data()
+        user = authenticate(username=username, password=password)
 
     if user is not None:
         refresh = RefreshToken.for_user(user)

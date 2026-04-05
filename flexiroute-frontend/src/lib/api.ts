@@ -53,10 +53,10 @@ export interface Order {
   status_display: string;
   approval_mode: 'NONE' | 'AUTO' | 'MANUAL';
   approval_mode_display: string;
-  decision_reason: string;
-  decided_by: number | null;
+  decision_reason?: string;
+  decided_by?: number | null;
   decided_by_username?: string;
-  decided_at: string | null;
+  decided_at?: string | null;
   time: string;
   content: string;
   priority_score?: number;
@@ -197,5 +197,5 @@ const mockRecommendations: Order[] = [
 ];
 
 const mockSurplusPoints: SurplusPoint[] = [
-  { id: 2, name: 'Point B', available_quantity: 100, distance: 5.2 },
+  { id: 2, name: 'Point B', current_stock_percent: 78, need_capacity: 300, distance: 5.2 },
 ];
