@@ -11,7 +11,26 @@ class OrderSerializer(serializers.ModelSerializer):
     urgency_display = serializers.CharField(source='get_urgency_level_display', read_only=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)
     priority_score = serializers.FloatField(read_only=True)
+    demand_ratio = serializers.FloatField(read_only=True)
+    priority_multiplier = serializers.FloatField(read_only=True)
+    time_since_last_delivery = serializers.FloatField(read_only=True)
 
     class Meta:
         model = Order
-        fields = '__all__'
+        fields = [
+            'id',
+            'delivery_point',
+            'priority',
+            'priority_display',
+            'content',
+            'urgency_level',
+            'urgency_display',
+            'quantity',
+            'status',
+            'status_display',
+            'time',
+            'priority_score',
+            'demand_ratio',
+            'priority_multiplier',
+            'time_since_last_delivery',
+        ]

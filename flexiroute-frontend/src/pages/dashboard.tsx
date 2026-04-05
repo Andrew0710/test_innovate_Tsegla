@@ -1,9 +1,8 @@
 import Head from 'next/head';
-import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useState, useEffect } from 'react';
 import Sidebar from '../components/Sidebar';
-import { api, Warehouse, Truck, DeliveryPoint } from '../lib/api';
+import { api } from '../lib/api';
 
 // --- ІНТЕРФЕЙСИ (ОРИГІНАЛЬНІ) ---
 interface Point {
@@ -22,6 +21,7 @@ interface Point {
 
 interface AIAction {
   id: number;
+  orderId: number;
   truckId: string;
   fromPoint: string;
   toPoint: string;
@@ -30,16 +30,22 @@ interface AIAction {
   status: 'pending' | 'approving' | 'approved' | 'ignored';
 }
 
+interface RecentRequest {
+  id: number;
+  pointName: string;
+  quantity: number;
+  urgencyLabel: string;
+  statusLabel: string;
+  createdAgo: string;
+}
+
 export default function Dashboard() {
   const router = useRouter();
 
   // --- СТАНИ ---
   const [points, setPoints] = useState<Point[]>([]);
-  const [actions, setActions] = useState<AIAction[]>([
-    { id: 1, truckId: 'T-42', fromPoint: 'Warehouse Beta', toPoint: 'Point Alpha', priority: 'critical', waitTime: '4m', status: 'pending' },
-    { id: 2, truckId: 'T-09', fromPoint: 'Point Delta', toPoint: 'Point Epsilon', priority: 'normal', waitTime: '12m', status: 'pending' },
-    { id: 3, truckId: 'T-88', fromPoint: 'Central Hub', toPoint: 'Point Gamma', priority: 'normal', waitTime: '1h', status: 'pending' },
-  ]);
+  const [actions, setActions] = useState<AIAction[]>([]);
+  const [recentRequests, setRecentRequests] = useState<RecentRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedPoint, setSelectedPoint] = useState<Point | null>(null);
 
@@ -54,37 +60,119 @@ export default function Dashboard() {
 
   // --- ЗАВАНТАЖЕННЯ ДАНИХ (ІНТЕГРАЦІЯ З БЕКЕНДОМ) ---
   useEffect(() => {
+    let isMounted = true;
+
     async function fetchData() {
       try {
-        const dData = await api.getDeliveryPoints();
+        const [dData, recommendations, allOrders] = await Promise.all([
+          api.getDeliveryPoints(),
+          api.getRecommendations(),
+          api.getOrders(),
+        ]);
+
+        const bestScoreByPoint = new Map<number, number>();
+        recommendations.forEach((order) => {
+          const prev = bestScoreByPoint.get(order.delivery_point) || 0;
+          bestScoreByPoint.set(order.delivery_point, Math.max(prev, order.priority_score || 0));
+        });
+
         const mappedPoints: Point[] = dData.map(p => ({
           id: p.id,
           name: p.name,
           units: p.need_capacity,
-          percentage: 85, // Mock percentage for original UI design
+          percentage: p.current_stock_percent,
           status: p.priority_level === 3 ? 'critical' : p.priority_level === 2 ? 'normal' : 'low',
           updatedAt: 'Now',
-          demandRatio: 'High',
-          score: 8.4,
+          demandRatio: p.current_stock_percent <= 20 ? 'High' : p.current_stock_percent <= 50 ? 'Medium' : 'Low',
+          score: Number((bestScoreByPoint.get(p.id) || 0).toFixed(2)),
           address: 'Main St, 12, Lviv',
           manager: 'Ivan Ivanov'
         }));
+        if (!isMounted) return;
         setPoints(mappedPoints);
+
+        const mappedActions: AIAction[] = await Promise.all(
+          recommendations.slice(0, 6).map(async (order, index) => {
+            let donorName = 'Central Hub';
+
+            try {
+              const redirect = await api.suggestRedirect(order.id);
+              const donor = dData.find((point) => point.id === redirect.donor_id);
+              donorName = donor?.name || donorName;
+            } catch {
+              donorName = 'Central Hub';
+            }
+
+            const waitMinutes = Math.max(
+              1,
+              Math.round((Date.now() - new Date(order.time).getTime()) / (1000 * 60))
+            );
+
+            return {
+              id: order.id,
+              orderId: order.id,
+              truckId: `T-${40 + index}`,
+              fromPoint: donorName,
+              toPoint: dData.find((point) => point.id === order.delivery_point)?.name || `Point #${order.delivery_point}`,
+              priority: order.urgency_level === 3 ? 'critical' : 'normal',
+              waitTime: waitMinutes < 60 ? `${waitMinutes}m` : `${Math.round(waitMinutes / 60)}h`,
+              status: 'pending',
+            };
+          })
+        );
+
+        if (!isMounted) return;
+        setActions(mappedActions);
+
+        const recent = allOrders
+          .slice(0, 6)
+          .map((order) => {
+            const elapsedMinutes = Math.max(
+              1,
+              Math.round((Date.now() - new Date(order.time).getTime()) / (1000 * 60))
+            );
+            return {
+              id: order.id,
+              pointName: dData.find((point) => point.id === order.delivery_point)?.name || `Point #${order.delivery_point}`,
+              quantity: order.quantity,
+              urgencyLabel: order.urgency_display,
+              statusLabel: order.status_display,
+              createdAgo: elapsedMinutes < 60 ? `${elapsedMinutes}m ago` : `${Math.round(elapsedMinutes / 60)}h ago`,
+            };
+          });
+
+        if (!isMounted) return;
+        setRecentRequests(recent);
       } catch (error) {
         console.error("Failed to fetch dashboard data:", error);
       } finally {
-        setIsLoading(false);
+        if (isMounted) {
+          setIsLoading(false);
+        }
       }
     }
+
     fetchData();
+
+    const intervalId = setInterval(fetchData, 8000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(intervalId);
+    };
   }, []);
 
   // --- ЛОГІКА AI ACTIONS ---
-  const handleApprove = (id: number) => {
+  const handleApprove = async (id: number) => {
     setActions(prev => prev.map(a => a.id === id ? { ...a, status: 'approving' } : a));
-    setTimeout(() => {
+
+    try {
+      await api.approveRedirect(id);
       setActions(prev => prev.map(a => a.id === id ? { ...a, status: 'approved' } : a));
-    }, 1000);
+    } catch (error) {
+      console.error('Failed to approve redirect:', error);
+      setActions(prev => prev.map(a => a.id === id ? { ...a, status: 'pending' } : a));
+    }
   };
 
   const handleIgnore = (id: number) => {
@@ -231,6 +319,26 @@ export default function Dashboard() {
                   )}
                 </div>
               ))}
+            </div>
+
+            <div className="mt-8 pt-8 border-t border-gray-100">
+              <h3 className="text-lg font-extrabold text-gray-900 mb-4">Recent Requests</h3>
+              <div className="flex flex-col gap-3">
+                {recentRequests.length === 0 && (
+                  <p className="text-sm text-gray-400 font-medium">No requests yet.</p>
+                )}
+                {recentRequests.map((request) => (
+                  <div key={request.id} className="rounded-2xl border border-gray-100 bg-gray-50/70 px-4 py-3">
+                    <div className="flex items-center justify-between gap-3 mb-1">
+                      <p className="font-bold text-sm text-gray-900">{request.pointName}</p>
+                      <p className="text-xs font-semibold text-gray-500">{request.createdAgo}</p>
+                    </div>
+                    <p className="text-xs font-semibold text-gray-500">
+                      {request.quantity} units • {request.urgencyLabel} • {request.statusLabel}
+                    </p>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>

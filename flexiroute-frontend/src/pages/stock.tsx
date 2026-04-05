@@ -1,12 +1,11 @@
 import Head from 'next/head';
-import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useState, useEffect } from 'react';
 import Sidebar from '../components/Sidebar';
-import { api, Warehouse, DeliveryPoint } from '../lib/api';
+import { api, DeliveryPoint, SurplusPoint } from '../lib/api';
 
 // --- ІНТЕРФЕЙСИ (ОРИГІНАЛЬНІ) ---
-interface Point {
+interface NearbyPoint extends SurplusPoint {
   id: number;
   name: string;
   units: number;
@@ -19,11 +18,7 @@ export default function StockManagement() {
   // --- СТАНИ ---
   const [points, setPoints] = useState<DeliveryPoint[]>([]);
   const [selectedPoint, setSelectedPoint] = useState<DeliveryPoint | null>(null);
-  const [nearbyPoints, setNearbyPoints] = useState<Point[]>([
-    { id: 101, name: 'Warehouse Alpha', units: 450, status: 'available' },
-    { id: 102, name: 'Point Gamma', units: 120, status: 'available' },
-    { id: 103, name: 'Point Delta', units: 85, status: 'available' },
-  ]);
+  const [nearbyPoints, setNearbyPoints] = useState<NearbyPoint[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   
   // UI States
@@ -45,13 +40,27 @@ export default function StockManagement() {
     }
   }, [router]);
 
+  const loadSurplusPoints = async (targetId: number) => {
+    const surplus = await api.getSurplusPoints(targetId);
+    setNearbyPoints(
+      surplus.map((point) => ({
+        ...point,
+        units: point.need_capacity,
+        status: point.current_stock_percent >= 60 ? 'available' : 'low',
+      }))
+    );
+  };
+
   // --- ЗАВАНТАЖЕННЯ ДАНИХ ---
   useEffect(() => {
     async function fetchData() {
       try {
         const dData = await api.getDeliveryPoints();
         setPoints(dData);
-        if (dData.length > 0) setSelectedPoint(dData[0]);
+        if (dData.length > 0) {
+          setSelectedPoint(dData[0]);
+          await loadSurplusPoints(dData[0].id);
+        }
       } catch (error) {
         console.error("Failed to fetch stock data:", error);
       } finally {
@@ -62,22 +71,53 @@ export default function StockManagement() {
   }, []);
 
   // --- ЛОГІКА ФОРМИ ---
-  const handleSendRequest = (e: React.FormEvent) => {
+  const handleSendRequest = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!isQtyValid) return;
+    if (!isQtyValid || !selectedPoint) return;
     
     setIsSubmitting(true);
-    setTimeout(() => {
+    try {
+      await api.createUrgentRequest({
+        delivery_point_id: selectedPoint.id,
+        quantity: Number(qty),
+        content: message,
+      });
+
+      const refreshed = await api.getDeliveryPoints();
+      setPoints(refreshed);
+      const updatedPoint = refreshed.find((point) => point.id === selectedPoint.id) || null;
+      setSelectedPoint(updatedPoint);
+      await loadSurplusPoints(selectedPoint.id);
+
       setIsSubmitting(false);
       setShowToast(true);
       setQty('');
       setMessage('');
       setTimeout(() => setShowToast(false), 3000);
-    }, 1500);
+    } catch (error) {
+      console.error('Failed to create urgent request:', error);
+      setIsSubmitting(false);
+    }
   };
 
-  const confirmBorrow = (id: number) => {
+  const confirmBorrow = async (id: number) => {
+    if (!selectedPoint) return;
+
     setNearbyPoints(prev => prev.map(p => p.id === id ? { ...p, status: 'pending' } : p));
+
+    try {
+      await api.createOrder({
+        delivery_point: selectedPoint.id,
+        priority: 2,
+        urgency_level: 2,
+        quantity: Number(qty) || 50,
+        content: `P2P borrow request from point #${id}`,
+      });
+    } catch (error) {
+      console.error('Failed to create borrow request:', error);
+      setNearbyPoints(prev => prev.map(p => p.id === id ? { ...p, status: 'available' } : p));
+    }
+
     setBorrowModal(null);
   };
 
@@ -104,6 +144,24 @@ export default function StockManagement() {
               </div>
               <h1 className="text-3xl md:text-5xl font-extrabold tracking-tight">Stock Management</h1>
             </div>
+            <div className="w-full sm:w-[280px]">
+              <label className="block text-sm font-semibold text-gray-500 mb-2">Delivery point</label>
+              <select
+                className="w-full bg-white border border-gray-200 rounded-2xl p-3.5 text-gray-800 font-medium"
+                value={selectedPoint?.id || ''}
+                onChange={async (e) => {
+                  const next = points.find((point) => point.id === Number(e.target.value)) || null;
+                  setSelectedPoint(next);
+                  if (next) {
+                    await loadSurplusPoints(next.id);
+                  }
+                }}
+              >
+                {points.map((point) => (
+                  <option key={point.id} value={point.id}>{point.name}</option>
+                ))}
+              </select>
+            </div>
           </div>
 
           {/* STATS AREA */}
@@ -112,7 +170,9 @@ export default function StockManagement() {
             <div className="flex-1 bg-white rounded-[32px] p-8 md:p-10 shadow-sm border border-gray-100 flex flex-col justify-center">
               <div className="flex justify-between items-center mb-10">
                 <h3 className="text-xl font-bold text-gray-400">Main Storage</h3>
-                <span className="text-sm font-bold text-red-500 bg-red-50 px-4 py-1.5 rounded-full border border-red-100 animate-pulse">Critical Shortage</span>
+                <span className="text-sm font-bold text-red-500 bg-red-50 px-4 py-1.5 rounded-full border border-red-100 animate-pulse">
+                  {selectedPoint && selectedPoint.current_stock_percent <= 20 ? 'Critical Shortage' : 'Active Monitoring'}
+                </span>
               </div>
               
               <div className="flex justify-between items-end mb-2">
@@ -120,9 +180,9 @@ export default function StockManagement() {
                 <span className="text-xl font-extrabold text-gray-900">{selectedPoint?.need_capacity || 0} units</span>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-3 mb-2 overflow-hidden">
-                <div className="bg-[#DA291C] h-3 rounded-full transition-all duration-1000" style={{ width: '12%' }}></div>
+                <div className="bg-[#DA291C] h-3 rounded-full transition-all duration-1000" style={{ width: `${selectedPoint?.current_stock_percent || 0}%` }}></div>
               </div>
-              <span className="text-xs font-bold text-gray-400">12% remaining</span>
+              <span className="text-xs font-bold text-gray-400">{selectedPoint?.current_stock_percent || 0}% remaining</span>
             </div>
             
             {/* Right Mini Cards */}
@@ -201,7 +261,7 @@ export default function StockManagement() {
                 <div key={point.id} className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 p-2">
                   <div>
                     <p className="font-extrabold text-gray-900 text-lg mb-1">{point.name}</p>
-                    <p className="text-sm font-medium text-gray-400">{point.units} units available</p>
+                    <p className="text-sm font-medium text-gray-400">{point.units} units available • {point.current_stock_percent}% stock</p>
                   </div>
                   {point.status === 'available' ? (
                     <button 

@@ -1,13 +1,13 @@
 import Head from 'next/head';
-import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useState, useEffect } from 'react';
 import Sidebar from '../components/Sidebar';
-import { api, Truck, DeliveryPoint } from '../lib/api';
+import { api } from '../lib/api';
 
 // --- ІНТЕРФЕЙСИ (ОРИГІНАЛЬНІ) ---
 interface TruckTask {
-  id: string;
+  id: number;
+  quantity: number;
   truckId: string;
   route: string;
   distance: number;
@@ -35,18 +35,25 @@ export default function DriverInterface() {
   useEffect(() => {
     async function fetchData() {
       try {
-        const dPoints = await api.getDeliveryPoints();
-        const trucks = await api.getTrucks();
+        const [dPoints, orders] = await Promise.all([
+          api.getDeliveryPoints(),
+          api.getOrders(),
+        ]);
         
-        // Mock active tasks based on backend delivery points
-        const mockTasks: TruckTask[] = dPoints.map((p, i) => ({
-          id: String(p.id),
-          truckId: i === 0 ? 'T-42 (Your Truck)' : `T-0${i}`,
-          route: `Go to ${p.name}`,
-          distance: 10 + i * 45, // Simulation
-          priority: p.priority_level === 3 ? 'critical' : p.priority_level === 2 ? 'normal' : 'low'
-        }));
-        setActiveTasks(mockTasks);
+        const liveOrders = orders.filter((order) => order.status === 'REDIRECTED' || order.status === 'PENDING');
+        const mappedTasks: TruckTask[] = liveOrders.map((order, i) => {
+          const point = dPoints.find((p) => p.id === order.delivery_point);
+          return {
+            id: order.id,
+            quantity: order.quantity,
+            truckId: i === 0 ? 'T-42 (Your Truck)' : `T-${10 + i}`,
+            route: `Go to ${point?.name || `Point #${order.delivery_point}`}`,
+            distance: 15 + i * 40,
+            priority: order.urgency_level === 3 ? 'critical' : order.urgency_level === 2 ? 'normal' : 'low',
+          };
+        });
+
+        setActiveTasks(mappedTasks);
       } catch (error) {
         console.error("Failed to fetch driver data:", error);
       } finally {
@@ -57,9 +64,14 @@ export default function DriverInterface() {
   }, []);
 
   // Логіка кнопки "Delivered"
-  const handleDeliver = (task: TruckTask) => {
-    setActiveTasks(prev => prev.filter(t => t.id !== task.id));
-    setArchivedTasks(prev => [{ ...task }, ...prev]);
+  const handleDeliver = async (task: TruckTask) => {
+    try {
+      await api.fulfillOrder(task.id, task.quantity);
+      setActiveTasks(prev => prev.filter(t => t.id !== task.id));
+      setArchivedTasks(prev => [{ ...task }, ...prev]);
+    } catch (error) {
+      console.error('Failed to fulfill order:', error);
+    }
   };
 
   // Кольори для бордерів, фону та крапочок (ОРИГІНАЛЬНІ)

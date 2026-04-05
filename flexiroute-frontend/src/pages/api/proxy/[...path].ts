@@ -5,6 +5,7 @@ const BACKEND_BASE_URL = process.env.BACKEND_BASE_URL || 'http://127.0.0.1:8000/
 function buildTargetUrl(req: NextApiRequest): string {
   const pathParam = req.query.path;
   const path = Array.isArray(pathParam) ? pathParam.join('/') : pathParam || '';
+  const normalizedPath = path ? `${path.replace(/\/+$/, '')}/` : '';
 
   const searchParams = new URLSearchParams();
   for (const [key, value] of Object.entries(req.query)) {
@@ -21,7 +22,7 @@ function buildTargetUrl(req: NextApiRequest): string {
 
   const query = searchParams.toString();
   const base = BACKEND_BASE_URL.replace(/\/+$/, '');
-  const target = `${base}/${path}`;
+  const target = normalizedPath ? `${base}/${normalizedPath}` : base;
 
   return query ? `${target}?${query}` : target;
 }

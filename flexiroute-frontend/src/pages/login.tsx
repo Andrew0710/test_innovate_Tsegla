@@ -8,25 +8,63 @@ export default function Login() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
+  const [error, setError] = useState<string>('');
 
-  const handleRoleSelect = (role: Role) => {
+  const roleCredentials: Record<Role, { username: string; password: string }> = {
+    dispatcher: { username: 'dispatcher_demo', password: 'demo12345' },
+    driver: { username: 'driver_demo', password: 'demo12345' },
+    manager: { username: 'manager_demo', password: 'demo12345' },
+  };
+
+  const normalizeRole = (backendRole?: string): Role | null => {
+    if (!backendRole) return null;
+    const map: Record<string, Role> = {
+      DISPATCHER: 'dispatcher',
+      OPERATOR: 'driver',
+      MANAGER: 'manager',
+    };
+    return map[backendRole] || null;
+  };
+
+  const handleRoleSelect = async (role: Role) => {
     setSelectedRole(role);
     setIsLoading(true);
+    setError('');
 
-    // Simulate login delay
-    setTimeout(() => {
+    try {
+      const credentials = roleCredentials[role];
+      const response = await fetch('/api/proxy/delivery/login/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(credentials),
+      });
+
+      if (!response.ok) {
+        throw new Error('Login failed');
+      }
+
+      const data = await response.json();
+      const resolvedRole = normalizeRole(data.role) || role;
+
       localStorage.setItem('isAuthenticated', 'true');
-      localStorage.setItem('userRole', role);
-      
-      // Redirect based on role
-      if (role === 'dispatcher') {
+      localStorage.setItem('userRole', resolvedRole);
+      localStorage.setItem('accessToken', data.access);
+      localStorage.setItem('refreshToken', data.refresh);
+      localStorage.setItem('workplaceId', data.workplace_id ? String(data.workplace_id) : '');
+
+      if (resolvedRole === 'dispatcher') {
         router.push('/dashboard');
-      } else if (role === 'driver') {
+      } else if (resolvedRole === 'driver') {
         router.push('/trucks');
-      } else if (role === 'manager') {
+      } else if (resolvedRole === 'manager') {
         router.push('/stock');
       }
-    }, 800);
+    } catch {
+      setError('Unable to sign in. Please seed demo users and try again.');
+      setIsLoading(false);
+    }
   };
 
   const roles: { id: Role, title: string, icon: string, description: string }[] = [
@@ -74,6 +112,10 @@ export default function Login() {
           ))}
         </div>
 
+        {error && (
+          <p className="mt-6 text-center text-sm font-semibold text-[#DA291C]">{error}</p>
+        )}
+
         {isLoading && (
           <div className="fixed inset-0 bg-white/60 backdrop-blur-sm z-50 flex flex-col items-center justify-center animate-fade-in">
             <div className="w-16 h-16 border-4 border-[#DA291C] border-t-transparent rounded-full animate-spin mb-4"></div>
@@ -83,4 +125,4 @@ export default function Login() {
       </div>
     </div>
   );
-}
+}
