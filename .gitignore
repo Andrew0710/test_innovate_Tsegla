@@ -50,3 +50,7 @@ out/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Copilot agent skills
+.agents/
+skills-lock.json
