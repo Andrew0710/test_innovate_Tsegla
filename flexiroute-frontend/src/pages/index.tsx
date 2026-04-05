@@ -1,37 +1,67 @@
 import Head from 'next/head';
 import Link from 'next/link';
+import { useState } from 'react';
 
 export default function LandingPage() {
+  // Логіка для мобільного меню
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+
   return (
-    <div className="min-h-screen bg-white text-gray-900 font-sans selection:bg-red-100 overflow-x-hidden">
+    <div className="min-h-screen bg-white text-gray-900 font-sans selection:bg-red-100 overflow-x-hidden scroll-smooth">
       <Head>
         <title>FlexiRoute | Streamline Your Transport Operations</title>
       </Head>
 
       {/* --- HEADER --- */}
-      <header className="max-w-screen-xl mx-auto px-4 sm:px-6 md:px-8 py-6 flex items-center justify-between">
-        <div className="flex items-center">
-          {/* Logo */}
-          <Link href="/" className="text-2xl font-black tracking-tighter">
-            Flexi<span className="text-[#DA291C]">R</span>oute
-          </Link>
-        </div>
-        
-        <nav className="hidden md:flex gap-10 text-base font-semibold text-gray-600">
-          <Link href="#" className="hover:text-[#DA291C] transition-colors py-2">About Us</Link>
-          <Link href="#" className="hover:text-[#DA291C] transition-colors py-2">Pricing</Link>
-          <Link href="#" className="hover:text-[#DA291C] transition-colors py-2">Contacts</Link>
-        </nav>
+      <header className="fixed top-0 left-0 right-0 z-50 bg-white border-b border-gray-100">
+        <div className="max-w-screen-xl mx-auto px-4 sm:px-6 md:px-8 py-6 flex items-center justify-between">
+          <div className="flex items-center">
+            {/* Logo */}
+            <Link href="/" className="text-2xl font-black tracking-tighter">
+              Flexi<span className="text-[#DA291C]">R</span>oute
+            </Link>
+          </div>
+          
+          {/* Навігація для десктопа (hidden на мобільних) */}
+          <nav className="hidden md:flex gap-10 text-base font-semibold text-gray-600">
+            <a href="#about" className="hover:text-[#DA291C] transition-colors py-2">About Us</a>
+            <a href="#pricing" className="hover:text-[#DA291C] transition-colors py-2">Pricing</a>
+            <a href="#contacts" className="hover:text-[#DA291C] transition-colors py-2">Contacts</a>
+          </nav>
 
-        <div className="flex gap-4 items-center">
-          <Link href="/login" className="bg-[#DA291C] hover:bg-red-700 text-white text-base font-bold py-3.5 px-8 rounded-xl transition-all shadow-md shadow-red-500/20 active:scale-95">
-            Log In
-          </Link>
-          <Link href="/dashboard" className="border border-gray-200 hover:border-gray-400 text-gray-800 text-base font-bold py-3.5 px-8 rounded-xl transition-all hidden sm:block active:scale-95">
-            Sign Up
-          </Link>
+          <div className="flex gap-4 items-center">
+            <Link href="/login" className="bg-[#DA291C] hover:bg-red-700 text-white text-base font-bold py-3.5 px-8 rounded-xl transition-all shadow-md shadow-red-500/20 active:scale-95">
+              Log In
+            </Link>
+            
+            {/* Кнопка бургера для мобільних */}
+            <button 
+              className="md:hidden p-2 text-gray-600"
+              onClick={() => setIsMenuOpen(!isMenuOpen)}
+            >
+              <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                {isMenuOpen ? (
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                ) : (
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                )}
+              </svg>
+            </button>
+          </div>
         </div>
+
+        {/* Мобільне меню (показується при isMenuOpen) */}
+        {isMenuOpen && (
+          <nav className="md:hidden bg-white border-t border-gray-100 p-4 flex flex-col gap-4 shadow-lg">
+            <a href="#about" onClick={() => setIsMenuOpen(false)} className="text-base font-semibold text-gray-600 py-2">About Us</a>
+            <a href="#pricing" onClick={() => setIsMenuOpen(false)} className="text-base font-semibold text-gray-600 py-2">Pricing</a>
+            <a href="#contacts" onClick={() => setIsMenuOpen(false)} className="text-base font-semibold text-gray-600 py-2">Contacts</a>
+          </nav>
+        )}
       </header>
+
+      {/* Відступ, щоб контент не ховався під фіксований хедер */}
+      <div className="h-24"></div>
 
       {/* --- HERO SECTION --- */}
       <section className="max-w-screen-xl mx-auto px-4 sm:px-6 md:px-8 py-12 md:py-20 flex flex-col md:flex-row items-center justify-between gap-8 md:gap-12">
@@ -57,8 +87,8 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* --- CHALLENGES SECTION --- */}
-      <section className="max-w-screen-xl mx-auto px-4 sm:px-6 md:px-8 py-16 sm:py-24">
+      {/* --- CHALLENGES SECTION (About Us) --- */}
+      <section id="about" className="max-w-screen-xl mx-auto px-4 sm:px-6 md:px-8 py-16 sm:py-24">
         <p className="text-xl text-gray-600 mb-2 font-medium">Challenges</p>
         <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-[56px] font-extrabold mb-12 sm:mb-16 leading-[1.1] tracking-tight">
           Facing Transport Companies <br className="hidden md:block"/> Today
@@ -92,8 +122,8 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* --- HOW IT WORKS SECTION --- */}
-      <section className="max-w-screen-xl mx-auto px-4 sm:px-6 md:px-8 py-16 sm:py-24">
+      {/* --- HOW IT WORKS SECTION (Pricing Placeholder) --- */}
+      <section id="pricing" className="max-w-screen-xl mx-auto px-4 sm:px-6 md:px-8 py-16 sm:py-24">
         <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-[56px] font-extrabold mb-12 sm:mb-16 tracking-tight">
           How <span className="font-normal text-gray-400">FlexiRoute</span> Works?
         </h2>
@@ -104,7 +134,7 @@ export default function LandingPage() {
             <div className="w-14 h-14 bg-[#DA291C] text-white rounded-full flex items-center justify-center font-bold text-xl mb-6 shadow-lg shadow-red-500/30">1</div>
             <h3 className="text-xl sm:text-2xl font-bold mb-3 sm:mb-4">Connect Your Fleet</h3>
             <p className="text-gray-500 text-sm sm:text-base leading-relaxed md:pr-6 font-medium">Integrate your vehicles, drivers, and existing systems in minutes. No complex setup required.</p>
-            {/* Arrow (hidden on mobile, visible on md+) */}
+            {/* Arrow */}
             <svg className="hidden md:block absolute top-7 right-0 w-8 h-8 text-gray-300 translate-x-1/2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
           </div>
           {/* Step 2 */}
@@ -112,7 +142,7 @@ export default function LandingPage() {
             <div className="w-14 h-14 bg-[#DA291C] text-white rounded-full flex items-center justify-center font-bold text-xl mb-6 shadow-lg shadow-red-500/30">2</div>
             <h3 className="text-xl sm:text-2xl font-bold mb-3 sm:mb-4">Optimize Routes</h3>
             <p className="text-gray-500 text-sm sm:text-base leading-relaxed md:pr-6 font-medium">AI-powered algorithms analyze traffic, delivery priorities, and vehicle capacity to create optimal routes.</p>
-            {/* Arrow (hidden on mobile, visible on md+) */}
+            {/* Arrow */}
             <svg className="hidden md:block absolute top-7 right-0 w-8 h-8 text-gray-300 translate-x-1/2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
           </div>
           {/* Step 3 */}
@@ -142,8 +172,8 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* --- FOOTER --- */}
-      <footer className="bg-white border-t border-gray-100 mt-8 sm:mt-10">
+      {/* --- FOOTER (Contacts) --- */}
+      <footer id="contacts" className="bg-white border-t border-gray-100 mt-8 sm:mt-10">
         <div className="max-w-screen-xl mx-auto px-4 sm:px-6 md:px-8 py-12 sm:py-16 flex flex-col sm:flex-row justify-between items-start gap-10">
           <div>
             <h4 className="font-extrabold text-gray-900 text-lg mb-4 sm:mb-6">Our Contacts:</h4>
