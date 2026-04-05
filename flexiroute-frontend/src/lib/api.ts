@@ -112,20 +112,24 @@ async function apiFetch<T>(endpoint: string, options?: RequestInit): Promise<T> 
 }
 
 export const api = {
-  getWarehouses: () => apiFetch<Warehouse[]>('/warehouses/'),
-  getProducts: () => apiFetch<Product[]>('/products/'),
-  getTrucks: () => apiFetch<Truck[]>('/trucks/'),
-  getDeliveryPoints: () => apiFetch<DeliveryPoint[]>('/delivery/points/'),
+  getWarehouses: () => process.env.NODE_ENV === 'development' ? Promise.resolve(mockWarehouses) : apiFetch<Warehouse[]>('/warehouses/'),
+  getProducts: () => process.env.NODE_ENV === 'development' ? Promise.resolve(mockProducts) : apiFetch<Product[]>('/products/'),
+  getTrucks: () => process.env.NODE_ENV === 'development' ? Promise.resolve(mockTrucks) : apiFetch<Truck[]>('/trucks/'),
+  getDeliveryPoints: () => process.env.NODE_ENV === 'development' ? Promise.resolve(mockDeliveryPoints) : apiFetch<DeliveryPoint[]>('/delivery/points/'),
   getOrders: (statuses?: Array<Order['status']>) => {
+    if (process.env.NODE_ENV === 'development') {
+      const filtered = statuses && statuses.length > 0 ? mockOrders.filter(o => statuses.includes(o.status)) : mockOrders;
+      return Promise.resolve(filtered);
+    }
     const suffix = statuses && statuses.length > 0 ? `?status=${statuses.join(',')}` : '';
     return apiFetch<Order[]>(`/delivery/orders/${suffix}`);
   },
-  getRecommendations: () => apiFetch<Order[]>('/delivery/orders/recommendations/'),
-  getPointRequests: (pointId: number, limit = 20) => apiFetch<Order[]>(`/delivery/points/${pointId}/requests/?limit=${limit}`),
-  getSurplusPoints: (targetId?: number) => {
+  getRecommendations: () => process.env.NODE_ENV === 'development' ? Promise.resolve(mockRecommendations) : apiFetch<Order[]>('/delivery/orders/recommendations/'),
+  getPointRequests: (pointId: number, limit = 20) => process.env.NODE_ENV === 'development' ? Promise.resolve(mockOrders.filter(o => o.delivery_point === pointId).slice(0, limit)) : apiFetch<Order[]>(`/delivery/points/${pointId}/requests/?limit=${limit}`),
+  getSurplusPoints: (targetId?: number) => process.env.NODE_ENV === 'development' ? Promise.resolve(mockSurplusPoints) : (() => {
     const suffix = typeof targetId === 'number' ? `?target_id=${targetId}` : '';
     return apiFetch<SurplusPoint[]>(`/delivery/points/surplus/${suffix}`);
-  },
+  })(),
   createOrder: (order: Partial<Order>) => apiFetch<Order>('/delivery/orders/', {
     method: 'POST',
     body: JSON.stringify(order),
@@ -162,3 +166,36 @@ export const api = {
     body: JSON.stringify(data),
   }),
 };
+
+// Mock data for development
+const mockWarehouses: Warehouse[] = [
+  { id: 1, name: 'Central Warehouse', x_coord: 50.45, y_coord: 30.52, delivery_radius: 100 },
+];
+
+const mockProducts: Product[] = [
+  { id: 1, warehouse: 1, name: 'Product A', count: 1000, mass: 10 },
+];
+
+const mockTrucks: Truck[] = [
+  { id: 1, warehouse: 1, status: 1, status_display: 'Available', capacity: 5000, current_load: 2000, current_x: 50.45, current_y: 30.52, is_full: false },
+  { id: 2, warehouse: 1, status: 2, status_display: 'In Transit', capacity: 5000, current_load: 4000, current_x: 50.5, current_y: 30.6, is_full: false },
+];
+
+const mockDeliveryPoints: DeliveryPoint[] = [
+  { id: 1, name: 'Point A', x_coord: 50.4, y_coord: 30.5, priority_level: 3, priority_display: 'Critical', need_name: 'Fuel', need_capacity: 500, current_stock_percent: 20, next_delivery: null },
+  { id: 2, name: 'Point B', x_coord: 50.5, y_coord: 30.6, priority_level: 2, priority_display: 'Normal', need_name: 'Fuel', need_capacity: 300, current_stock_percent: 60, next_delivery: '2024-01-15' },
+  { id: 3, name: 'Point C', x_coord: 50.6, y_coord: 30.7, priority_level: 1, priority_display: 'Low', need_name: 'Fuel', need_capacity: 200, current_stock_percent: 80, next_delivery: null },
+];
+
+const mockOrders: Order[] = [
+  { id: 1, delivery_point: 1, priority: 3, priority_display: 'High', urgency_level: 3, urgency_display: 'Critical', status: 'PENDING', status_display: 'Pending', quantity: 200, time: '2024-01-10T10:00:00Z', approval_mode: 'NONE', approval_mode_display: 'None', content: 'Urgent fuel delivery' },
+  { id: 2, delivery_point: 2, priority: 2, priority_display: 'Medium', urgency_level: 2, urgency_display: 'Normal', status: 'LOADING', status_display: 'Loading', quantity: 150, time: '2024-01-09T14:00:00Z', approval_mode: 'AUTO', approval_mode_display: 'Auto', content: 'Regular supply' },
+];
+
+const mockRecommendations: Order[] = [
+  { id: 3, delivery_point: 1, priority: 3, priority_display: 'High', urgency_level: 3, urgency_display: 'Critical', status: 'PENDING', status_display: 'Pending', quantity: 100, time: '2024-01-11T08:00:00Z', approval_mode: 'NONE', approval_mode_display: 'None', content: 'AI recommended redirect' },
+];
+
+const mockSurplusPoints: SurplusPoint[] = [
+  { id: 2, name: 'Point B', available_quantity: 100, distance: 5.2 },
+];

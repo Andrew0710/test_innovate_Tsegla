@@ -32,6 +32,24 @@ export default function Login() {
     setError('');
 
     try {
+      // For development/demo purposes, simulate login without backend
+      if (process.env.NODE_ENV === 'development') {
+        localStorage.setItem('isAuthenticated', 'true');
+        localStorage.setItem('userRole', role);
+        localStorage.setItem('accessToken', 'demo-token');
+        localStorage.setItem('refreshToken', 'demo-refresh');
+        localStorage.setItem('workplaceId', '1');
+
+        if (role === 'dispatcher') {
+          router.push('/dashboard');
+        } else if (role === 'driver') {
+          router.push('/trucks');
+        } else if (role === 'manager') {
+          router.push('/stock');
+        }
+        return;
+      }
+
       const credentials = roleCredentials[role];
       const response = await fetch('/api/proxy/delivery/login/', {
         method: 'POST',
