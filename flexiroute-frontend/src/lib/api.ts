@@ -49,8 +49,14 @@ export interface Order {
   urgency_level: number;
   urgency_display: string;
   quantity: number;
-  status: 'PENDING' | 'REDIRECTED' | 'FULFILLED';
+  status: 'PENDING' | 'REJECTED' | 'REDIRECTED' | 'LOADING' | 'FULFILLED';
   status_display: string;
+  approval_mode: 'NONE' | 'AUTO' | 'MANUAL';
+  approval_mode_display: string;
+  decision_reason: string;
+  decided_by: number | null;
+  decided_by_username?: string;
+  decided_at: string | null;
   time: string;
   content: string;
   priority_score?: number;
@@ -86,7 +92,20 @@ async function apiFetch<T>(endpoint: string, options?: RequestInit): Promise<T> 
   });
 
   if (!response.ok) {
-    throw new Error(`API error: ${response.statusText}`);
+    if (response.status === 401 && typeof window !== 'undefined') {
+      // Stale/invalid JWT is common after reseeding demo data.
+      localStorage.removeItem('isAuthenticated');
+      localStorage.removeItem('userRole');
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
+      localStorage.removeItem('workplaceId');
+
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login';
+      }
+    }
+
+    throw new Error(`API error (${response.status}): ${response.statusText}`);
   }
 
   return response.json();
@@ -97,8 +116,12 @@ export const api = {
   getProducts: () => apiFetch<Product[]>('/products/'),
   getTrucks: () => apiFetch<Truck[]>('/trucks/'),
   getDeliveryPoints: () => apiFetch<DeliveryPoint[]>('/delivery/points/'),
-  getOrders: () => apiFetch<Order[]>('/delivery/orders/'),
+  getOrders: (statuses?: Array<Order['status']>) => {
+    const suffix = statuses && statuses.length > 0 ? `?status=${statuses.join(',')}` : '';
+    return apiFetch<Order[]>(`/delivery/orders/${suffix}`);
+  },
   getRecommendations: () => apiFetch<Order[]>('/delivery/orders/recommendations/'),
+  getPointRequests: (pointId: number, limit = 20) => apiFetch<Order[]>(`/delivery/points/${pointId}/requests/?limit=${limit}`),
   getSurplusPoints: (targetId?: number) => {
     const suffix = typeof targetId === 'number' ? `?target_id=${targetId}` : '';
     return apiFetch<SurplusPoint[]>(`/delivery/points/surplus/${suffix}`);
@@ -120,6 +143,13 @@ export const api = {
     distance: number;
   }>(`/delivery/orders/${orderId}/suggest_redirect/`),
   approveRedirect: (orderId: number) => apiFetch<Order>(`/delivery/orders/${orderId}/approve_redirect/`, {
+    method: 'POST',
+  }),
+  rejectRequest: (orderId: number, reason?: string) => apiFetch<Order>(`/delivery/orders/${orderId}/reject_request/`, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
+  }),
+  markLoading: (orderId: number) => apiFetch<Order>(`/delivery/orders/${orderId}/mark_loading/`, {
     method: 'POST',
   }),
   fulfillOrder: (orderId: number, delivered_quantity?: number) =>

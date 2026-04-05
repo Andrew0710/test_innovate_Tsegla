@@ -26,7 +26,7 @@ export default function DriverInterface() {
   useEffect(() => {
     const isAuthenticated = localStorage.getItem('isAuthenticated');
     const userRole = localStorage.getItem('userRole');
-    if (!isAuthenticated || (userRole !== 'driver' && userRole !== 'dispatcher')) {
+    if (!isAuthenticated || userRole !== 'driver') {
       router.push('/login');
     }
   }, [router]);
@@ -40,13 +40,13 @@ export default function DriverInterface() {
           api.getOrders(),
         ]);
         
-        const liveOrders = orders.filter((order) => order.status === 'REDIRECTED' || order.status === 'PENDING');
+        const liveOrders = orders.filter((order) => order.status === 'LOADING');
         const mappedTasks: TruckTask[] = liveOrders.map((order, i) => {
           const point = dPoints.find((p) => p.id === order.delivery_point);
           return {
             id: order.id,
             quantity: order.quantity,
-            truckId: i === 0 ? 'T-42 (Your Truck)' : `T-${10 + i}`,
+            truckId: i === 0 ? 'T-42 (Your Truck)' : `T-${40 + i}`,
             route: `Go to ${point?.name || `Point #${order.delivery_point}`}`,
             distance: 15 + i * 40,
             priority: order.urgency_level === 3 ? 'critical' : order.urgency_level === 2 ? 'normal' : 'low',
@@ -137,15 +137,14 @@ export default function DriverInterface() {
                   </div>
 
                   <div className="relative z-10 flex flex-col gap-3 w-full sm:w-[180px] shrink-0">
-                    <button 
-                      disabled={!isNear}
-                      className={`font-bold py-3.5 px-6 rounded-[20px] transition-all flex items-center justify-center gap-3 text-base w-full
+                    <div 
+                      className={`font-bold py-3.5 px-6 rounded-[20px] text-base w-full text-center border
                         ${isNear 
-                          ? 'bg-[#DA291C] hover:bg-red-700 text-white shadow-lg shadow-red-500/20 active:scale-[0.98]' 
-                          : 'bg-gray-100/80 text-gray-400 cursor-not-allowed border border-gray-200'}`}
+                          ? 'bg-red-50 text-[#DA291C] border-red-200' 
+                          : 'bg-gray-100/80 text-gray-400 border-gray-200'}`}
                     >
-                      {isNear ? 'Unload' : 'Too Far'}
-                    </button>
+                      {isNear ? 'At Delivery Zone' : 'Too Far'}
+                    </div>
                     <button 
                       onClick={() => handleDeliver(task)} 
                       disabled={!isNear}

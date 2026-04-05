@@ -15,6 +15,13 @@ class DeliveryPointViewSet(viewsets.ModelViewSet):
     queryset = DeliveryPoint.objects.all()
     serializer_class = DeliveryPointSerializer
 
+    @action(detail=True, methods=['get'], url_path='requests')
+    def requests_for_point(self, request, pk=None):
+        point = self.get_object()
+        limit = min(int(request.query_params.get('limit', 20)), 100)
+        orders = Order.objects.filter(delivery_point=point).order_by('-time')[:limit]
+        return Response(OrderSerializer(orders, many=True).data)
+
     @action(detail=False, methods=['get'], url_path='surplus')
     def surplus_points(self, request):
         target_id = request.query_params.get('target_id')
@@ -52,7 +59,57 @@ class OrderViewSet(viewsets.ModelViewSet):
     serializer_class = OrderSerializer
 
     def get_queryset(self):
-        return self.queryset.order_by('-time')
+        queryset = self.queryset.order_by('-time')
+        statuses_param = self.request.query_params.get('status')
+        if statuses_param:
+            requested_statuses = [s.strip().upper() for s in statuses_param.split(',') if s.strip()]
+            allowed_statuses = {choice[0] for choice in Order.Status.choices}
+            valid_statuses = [s for s in requested_statuses if s in allowed_statuses]
+            if valid_statuses:
+                queryset = queryset.filter(status__in=valid_statuses)
+        return queryset
+
+    def _is_dispatcher(self, user):
+        return bool(
+            user
+            and user.is_authenticated
+            and hasattr(user, 'profile')
+            and user.profile.role == 'DISPATCHER'
+        )
+
+    def _critical_auto_approval(self, order):
+        if order.urgency_level != Order.Urgency.CRITICAL:
+            return False, 'Low/normal requests require manual dispatcher approval.'
+
+        if order.delivery_point.current_stock_percent > 20:
+            return False, 'Critical auto-approval is only allowed for stock at or below 20%.'
+
+        donors = DeliveryPoint.objects.filter(current_stock_percent__gt=80).exclude(id=order.delivery_point.id)
+        if not donors.exists():
+            return False, 'No eligible donor point available for critical auto-approval.'
+
+        return True, 'Auto-approved: critical shortage and donor point available.'
+
+    def _apply_initial_decision(self, order):
+        should_auto_approve, reason = self._critical_auto_approval(order)
+        order.decision_reason = reason
+
+        if should_auto_approve:
+            order.status = Order.Status.REDIRECTED
+            order.approval_mode = Order.ApprovalMode.AUTO
+            order.decided_at = timezone.now()
+            order.decided_by = None
+        else:
+            order.status = Order.Status.PENDING
+            order.approval_mode = Order.ApprovalMode.NONE
+            order.decided_at = None
+            order.decided_by = None
+
+        order.save(update_fields=['status', 'approval_mode', 'decision_reason', 'decided_at', 'decided_by'])
+
+    def perform_create(self, serializer):
+        order = serializer.save(status=Order.Status.PENDING)
+        self._apply_initial_decision(order)
 
     def _priority_multiplier(self, order):
         if order.urgency_level == Order.Urgency.CRITICAL:
@@ -86,7 +143,10 @@ class OrderViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def recommendations(self, request):
-        orders = self.get_queryset().filter(status=Order.Status.PENDING)
+        orders = self.get_queryset().filter(
+            status=Order.Status.PENDING,
+            approval_mode=Order.ApprovalMode.NONE,
+        )
         ranked = []
 
         for order in orders:
@@ -136,10 +196,47 @@ class OrderViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def approve_redirect(self, request, pk=None):
         order = self.get_object()
+        if not self._is_dispatcher(request.user):
+            return Response({"error": "Only dispatchers can approve redirects"}, status=status.HTTP_403_FORBIDDEN)
+
         if order.status != Order.Status.PENDING:
             return Response({"error": "Замовлення вже оброблене"}, status=status.HTTP_400_BAD_REQUEST)
 
         order.status = Order.Status.REDIRECTED
+        order.approval_mode = Order.ApprovalMode.MANUAL
+        order.decision_reason = request.data.get('reason', 'Manually approved by dispatcher.')
+        order.decided_at = timezone.now()
+        order.decided_by = request.user
+        order.save(update_fields=['status', 'approval_mode', 'decision_reason', 'decided_at', 'decided_by'])
+        return Response(self.get_serializer(order).data)
+
+    @action(detail=True, methods=['post'])
+    def reject_request(self, request, pk=None):
+        order = self.get_object()
+        if not self._is_dispatcher(request.user):
+            return Response({"error": "Only dispatchers can reject requests"}, status=status.HTTP_403_FORBIDDEN)
+
+        if order.status != Order.Status.PENDING or order.approval_mode != Order.ApprovalMode.NONE:
+            return Response({"error": "Only undecided pending orders can be rejected"}, status=status.HTTP_400_BAD_REQUEST)
+
+        order.status = Order.Status.REJECTED
+        order.approval_mode = Order.ApprovalMode.MANUAL
+        order.decision_reason = request.data.get('reason', 'Rejected by dispatcher.')
+        order.decided_at = timezone.now()
+        order.decided_by = request.user
+        order.save(update_fields=['status', 'approval_mode', 'decision_reason', 'decided_at', 'decided_by'])
+        return Response(self.get_serializer(order).data)
+
+    @action(detail=True, methods=['post'])
+    def mark_loading(self, request, pk=None):
+        order = self.get_object()
+        if not self._is_dispatcher(request.user):
+            return Response({"error": "Only dispatchers can mark loading"}, status=status.HTTP_403_FORBIDDEN)
+
+        if order.status != Order.Status.REDIRECTED:
+            return Response({"error": "Only redirected orders can move to loading"}, status=status.HTTP_400_BAD_REQUEST)
+
+        order.status = Order.Status.LOADING
         order.save(update_fields=['status'])
         return Response(self.get_serializer(order).data)
 
@@ -148,6 +245,12 @@ class OrderViewSet(viewsets.ModelViewSet):
         order = self.get_object()
         if order.status == Order.Status.FULFILLED:
             return Response({"error": "Замовлення вже виконане"}, status=status.HTTP_400_BAD_REQUEST)
+
+        if order.status not in (Order.Status.REDIRECTED, Order.Status.LOADING):
+            return Response(
+                {"error": "Only approved/loading orders can be fulfilled"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         delivered_quantity = int(request.data.get('delivered_quantity', order.quantity) or order.quantity)
 
@@ -201,6 +304,8 @@ class OrderViewSet(viewsets.ModelViewSet):
             quantity=quantity,
             status=Order.Status.PENDING
         )
+
+        self._apply_initial_decision(order)
 
         target_point.priority_level = DeliveryPoint.Priority.CRITICAL
         target_point.save(update_fields=['priority_level'])

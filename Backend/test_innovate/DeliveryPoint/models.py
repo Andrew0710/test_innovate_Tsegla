@@ -31,8 +31,15 @@ class Order(models.Model):
 
     class Status(models.TextChoices):
         PENDING = 'PENDING', 'Pending'
+        REJECTED = 'REJECTED', 'Rejected'
         REDIRECTED = 'REDIRECTED', 'Redirected'
+        LOADING = 'LOADING', 'Loading'
         FULFILLED = 'FULFILLED', 'Fulfilled'
+
+    class ApprovalMode(models.TextChoices):
+        NONE = 'NONE', 'No decision yet'
+        AUTO = 'AUTO', 'Auto-approved'
+        MANUAL = 'MANUAL', 'Manually approved'
 
     delivery_point = models.ForeignKey(DeliveryPoint, on_delete=models.CASCADE, related_name='orders')
 
@@ -42,6 +49,10 @@ class Order(models.Model):
     urgency_level = models.IntegerField(choices=Urgency.choices, default=Urgency.NORMAL)
     quantity = models.IntegerField(default=0, help_text="How much needed")
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    approval_mode = models.CharField(max_length=20, choices=ApprovalMode.choices, default=ApprovalMode.NONE)
+    decision_reason = models.CharField(max_length=255, blank=True, default='')
+    decided_by = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL, related_name='decided_orders')
+    decided_at = models.DateTimeField(null=True, blank=True)
     
     time = models.DateTimeField(auto_now_add=True)
 

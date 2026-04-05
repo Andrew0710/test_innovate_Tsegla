@@ -2,7 +2,7 @@ import Head from 'next/head';
 import { useRouter } from 'next/router';
 import { useState, useEffect } from 'react';
 import Sidebar from '../components/Sidebar';
-import { api } from '../lib/api';
+import { api, Order } from '../lib/api';
 
 // --- ІНТЕРФЕЙСИ (ОРИГІНАЛЬНІ) ---
 interface Point {
@@ -14,9 +14,6 @@ interface Point {
   updatedAt: string;
   demandRatio: string;
   score: number;
-  // Поля для Side Panel
-  address?: string;
-  manager?: string;
 }
 
 interface AIAction {
@@ -27,7 +24,7 @@ interface AIAction {
   toPoint: string;
   priority: 'critical' | 'normal';
   waitTime: string;
-  status: 'pending' | 'approving' | 'approved' | 'ignored';
+  status: 'pending' | 'approving';
 }
 
 interface RecentRequest {
@@ -48,6 +45,8 @@ export default function Dashboard() {
   const [recentRequests, setRecentRequests] = useState<RecentRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedPoint, setSelectedPoint] = useState<Point | null>(null);
+  const [selectedPointRequests, setSelectedPointRequests] = useState<Order[]>([]);
+  const [pointRequestsLoading, setPointRequestsLoading] = useState(false);
 
   // --- ЗАХИСТ МАРШРУТУ (ЛОГІКА ЯКУ ТРЕБА ЗАЛИШИТИ) ---
   useEffect(() => {
@@ -67,7 +66,7 @@ export default function Dashboard() {
         const [dData, recommendations, allOrders] = await Promise.all([
           api.getDeliveryPoints(),
           api.getRecommendations(),
-          api.getOrders(),
+          api.getOrders(['PENDING', 'REJECTED', 'REDIRECTED', 'LOADING']),
         ]);
 
         const bestScoreByPoint = new Map<number, number>();
@@ -85,8 +84,6 @@ export default function Dashboard() {
           updatedAt: 'Now',
           demandRatio: p.current_stock_percent <= 20 ? 'High' : p.current_stock_percent <= 50 ? 'Medium' : 'Low',
           score: Number((bestScoreByPoint.get(p.id) || 0).toFixed(2)),
-          address: 'Main St, 12, Lviv',
-          manager: 'Ivan Ivanov'
         }));
         if (!isMounted) return;
         setPoints(mappedPoints);
@@ -131,12 +128,15 @@ export default function Dashboard() {
               1,
               Math.round((Date.now() - new Date(order.time).getTime()) / (1000 * 60))
             );
+            const isUndecided = order.status === 'PENDING' && order.approval_mode === 'NONE';
             return {
               id: order.id,
               pointName: dData.find((point) => point.id === order.delivery_point)?.name || `Point #${order.delivery_point}`,
               quantity: order.quantity,
               urgencyLabel: order.urgency_display,
-              statusLabel: order.status_display,
+              statusLabel: isUndecided
+                ? `${order.status_display} (${order.approval_mode_display})`
+                : order.status_display,
               createdAgo: elapsedMinutes < 60 ? `${elapsedMinutes}m ago` : `${Math.round(elapsedMinutes / 60)}h ago`,
             };
           });
@@ -168,16 +168,50 @@ export default function Dashboard() {
 
     try {
       await api.approveRedirect(id);
-      setActions(prev => prev.map(a => a.id === id ? { ...a, status: 'approved' } : a));
+      setActions(prev => prev.filter(a => a.id !== id));
+      setRecentRequests(prev => prev.map((request) => (
+        request.id === id ? { ...request, statusLabel: 'Redirected' } : request
+      )));
     } catch (error) {
       console.error('Failed to approve redirect:', error);
       setActions(prev => prev.map(a => a.id === id ? { ...a, status: 'pending' } : a));
     }
   };
 
-  const handleIgnore = (id: number) => {
-    setActions(prev => prev.map(a => a.id === id ? { ...a, status: 'ignored' } : a));
+  const handleIgnore = async (id: number) => {
+    setActions(prev => prev.map(a => a.id === id ? { ...a, status: 'approving' } : a));
+    try {
+      await api.rejectRequest(id);
+      setActions(prev => prev.filter(a => a.id !== id));
+      setRecentRequests(prev => prev.map((request) => (
+        request.id === id ? { ...request, statusLabel: 'Rejected' } : request
+      )));
+    } catch (error) {
+      console.error('Failed to reject request:', error);
+      setActions(prev => prev.map(a => a.id === id ? { ...a, status: 'pending' } : a));
+    }
   };
+
+  useEffect(() => {
+    async function fetchSelectedPointRequests(pointId: number) {
+      setPointRequestsLoading(true);
+      try {
+        const requests = await api.getPointRequests(pointId, 30);
+        setSelectedPointRequests(requests);
+      } catch (error) {
+        console.error('Failed to load point requests:', error);
+        setSelectedPointRequests([]);
+      } finally {
+        setPointRequestsLoading(false);
+      }
+    }
+
+    if (selectedPoint) {
+      fetchSelectedPointRequests(selectedPoint.id);
+    } else {
+      setSelectedPointRequests([]);
+    }
+  }, [selectedPoint]);
 
   // --- УТИЛІТИ ДЛЯ КОЛЬОРІВ (ОРИГІНАЛЬНІ) ---
   const getStatusColors = (status: string) => {
@@ -288,8 +322,7 @@ export default function Dashboard() {
                 <div 
                   key={action.id} 
                   className={`border border-gray-200 rounded-[24px] p-5 bg-white transition-all duration-500 transform
-                    ${action.status === 'approving' ? 'opacity-0 translate-x-10 scale-95' : ''} 
-                    ${action.status === 'ignored' ? 'opacity-50 grayscale hover:grayscale-0' : 'hover:shadow-md hover:border-[#DA291C]/40'}`}
+                    ${action.status === 'approving' ? 'opacity-70 scale-[0.98]' : 'hover:shadow-md hover:border-[#DA291C]/40'}`}
                 >
                   <div className="flex justify-between items-center mb-5">
                     <span className={`w-4 h-4 rounded-full ${action.priority === 'critical' ? 'bg-[#DA291C]' : 'bg-[#A3E635]'}`}></span>
@@ -303,18 +336,18 @@ export default function Dashboard() {
                     <div className="flex items-center gap-4 text-gray-900 relative z-10"><span className="w-2 h-2 rounded-full border-2 border-gray-900 bg-white"></span> {action.toPoint}</div>
                   </div>
 
-                  {action.status === 'pending' || action.status === 'ignored' ? (
+                  {action.status === 'pending' ? (
                     <div className="flex gap-3">
                       <button onClick={() => handleApprove(action.id)} className="flex-1 bg-[#DA291C] hover:bg-red-700 text-white font-bold py-3.5 rounded-xl transition-all active:scale-95 shadow-md shadow-red-500/20">
                         Approve
                       </button>
-                      <button onClick={() => handleIgnore(action.id)} disabled={action.status === 'ignored'} className="flex-1 bg-white border border-gray-200 hover:bg-gray-50 text-gray-600 font-bold py-3.5 rounded-xl transition-all active:scale-95">
+                      <button onClick={() => handleIgnore(action.id)} className="flex-1 bg-white border border-gray-200 hover:bg-gray-50 text-gray-600 font-bold py-3.5 rounded-xl transition-all active:scale-95">
                         Ignore
                       </button>
                     </div>
                   ) : (
-                    <div className="w-full bg-green-50 text-green-600 border border-green-200 font-bold py-3.5 rounded-xl flex justify-center items-center gap-2">
-                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg> Approved
+                    <div className="w-full bg-gray-50 text-gray-600 border border-gray-200 font-bold py-3.5 rounded-xl flex justify-center items-center gap-2">
+                      Processing...
                     </div>
                   )}
                 </div>
@@ -355,10 +388,28 @@ export default function Dashboard() {
               </div>
               
               <div className="bg-gray-50 rounded-3xl p-6 border border-gray-100 mb-6">
-                <p className="text-sm text-gray-500 mb-1">Address</p>
-                <p className="font-bold text-gray-900 mb-4">{selectedPoint.address}</p>
-                <p className="text-sm text-gray-500 mb-1">Manager</p>
-                <p className="font-bold text-gray-900">{selectedPoint.manager}</p>
+                <p className="text-sm text-gray-500 mb-4">Recent requests for this point</p>
+                {pointRequestsLoading && (
+                  <p className="text-sm font-semibold text-gray-500">Loading requests...</p>
+                )}
+                {!pointRequestsLoading && selectedPointRequests.length === 0 && (
+                  <p className="text-sm font-semibold text-gray-500">No requests yet.</p>
+                )}
+                {!pointRequestsLoading && selectedPointRequests.length > 0 && (
+                  <div className="flex flex-col gap-3 max-h-[420px] overflow-y-auto pr-1">
+                    {selectedPointRequests.map((request) => (
+                      <div key={request.id} className="rounded-2xl border border-gray-200 bg-white px-4 py-3">
+                        <p className="text-sm font-bold text-gray-900 mb-1">{request.quantity} units</p>
+                        <p className="text-xs font-semibold text-gray-500 mb-1">
+                          {request.urgency_display} • {request.status_display} • {request.approval_mode_display}
+                        </p>
+                        {request.decision_reason && (
+                          <p className="text-xs text-gray-600">{request.decision_reason}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div className="mt-auto">

@@ -2,7 +2,7 @@ import Head from 'next/head';
 import { useRouter } from 'next/router';
 import { useState, useEffect } from 'react';
 import Sidebar from '../components/Sidebar';
-import { api, DeliveryPoint, SurplusPoint } from '../lib/api';
+import { api, DeliveryPoint, Order, SurplusPoint } from '../lib/api';
 
 // --- ІНТЕРФЕЙСИ (ОРИГІНАЛЬНІ) ---
 interface NearbyPoint extends SurplusPoint {
@@ -19,6 +19,7 @@ export default function StockManagement() {
   const [points, setPoints] = useState<DeliveryPoint[]>([]);
   const [selectedPoint, setSelectedPoint] = useState<DeliveryPoint | null>(null);
   const [nearbyPoints, setNearbyPoints] = useState<NearbyPoint[]>([]);
+  const [pointRequests, setPointRequests] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   
   // UI States
@@ -51,6 +52,11 @@ export default function StockManagement() {
     );
   };
 
+  const loadPointRequests = async (pointId: number) => {
+    const requests = await api.getPointRequests(pointId, 20);
+    setPointRequests(requests);
+  };
+
   // --- ЗАВАНТАЖЕННЯ ДАНИХ ---
   useEffect(() => {
     async function fetchData() {
@@ -60,6 +66,7 @@ export default function StockManagement() {
         if (dData.length > 0) {
           setSelectedPoint(dData[0]);
           await loadSurplusPoints(dData[0].id);
+          await loadPointRequests(dData[0].id);
         }
       } catch (error) {
         console.error("Failed to fetch stock data:", error);
@@ -88,6 +95,7 @@ export default function StockManagement() {
       const updatedPoint = refreshed.find((point) => point.id === selectedPoint.id) || null;
       setSelectedPoint(updatedPoint);
       await loadSurplusPoints(selectedPoint.id);
+      await loadPointRequests(selectedPoint.id);
 
       setIsSubmitting(false);
       setShowToast(true);
@@ -113,6 +121,7 @@ export default function StockManagement() {
         quantity: Number(qty) || 50,
         content: `P2P borrow request from point #${id}`,
       });
+      await loadPointRequests(selectedPoint.id);
     } catch (error) {
       console.error('Failed to create borrow request:', error);
       setNearbyPoints(prev => prev.map(p => p.id === id ? { ...p, status: 'available' } : p));
@@ -143,6 +152,7 @@ export default function StockManagement() {
                 Monitoring: <span className="text-gray-900 border-b-2 border-[#DA291C] px-1">{selectedPoint?.name || 'Loading...'}</span>
               </div>
               <h1 className="text-3xl md:text-5xl font-extrabold tracking-tight">Stock Management</h1>
+              <p className="text-sm font-semibold text-gray-500 mt-2">Create requests and monitor approval status for the selected point.</p>
             </div>
             <div className="w-full sm:w-[280px]">
               <label className="block text-sm font-semibold text-gray-500 mb-2">Delivery point</label>
@@ -154,6 +164,7 @@ export default function StockManagement() {
                   setSelectedPoint(next);
                   if (next) {
                     await loadSurplusPoints(next.id);
+                    await loadPointRequests(next.id);
                   }
                 }}
               >
@@ -275,6 +286,30 @@ export default function StockManagement() {
                       <div className="animate-spin w-4 h-4 border-2 border-orange-500 border-t-transparent rounded-full"></div> 
                       Pending confirmation
                     </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="bg-white rounded-[32px] p-8 md:p-10 shadow-sm border border-gray-100 mb-10">
+            <h2 className="text-xl font-bold mb-2">Requests for {selectedPoint?.name}</h2>
+            <p className="text-sm text-gray-500 font-medium mb-6">Latest requests and their approval source.</p>
+            <div className="flex flex-col gap-3">
+              {pointRequests.length === 0 && (
+                <p className="text-sm text-gray-400 font-medium">No requests yet.</p>
+              )}
+              {pointRequests.map((request) => (
+                <div key={request.id} className="rounded-2xl border border-gray-100 bg-gray-50/70 px-4 py-3">
+                  <div className="flex items-center justify-between gap-3 mb-1">
+                    <p className="font-bold text-sm text-gray-900">{request.quantity} units</p>
+                    <p className="text-xs font-semibold text-gray-500">{new Date(request.time).toLocaleTimeString()}</p>
+                  </div>
+                  <p className="text-xs font-semibold text-gray-500">
+                    {request.urgency_display} • {request.status_display} • {request.approval_mode_display}
+                  </p>
+                  {request.decision_reason && (
+                    <p className="text-xs text-gray-600 mt-1">{request.decision_reason}</p>
                   )}
                 </div>
               ))}

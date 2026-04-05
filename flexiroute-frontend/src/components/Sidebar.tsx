@@ -1,6 +1,5 @@
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { useState, useEffect } from 'react';
 
 interface SidebarProps {
   activePage: 'dashboard' | 'stock' | 'loading' | 'trucks';
@@ -8,11 +7,7 @@ interface SidebarProps {
 
 export default function Sidebar({ activePage }: SidebarProps) {
   const router = useRouter();
-  const [userRole, setUserRole] = useState<string | null>(null);
-
-  useEffect(() => {
-    setUserRole(localStorage.getItem('userRole'));
-  }, []);
+  const userRole = typeof window !== 'undefined' ? localStorage.getItem('userRole') : null;
 
   const navLinks = [
     { href: '/dashboard', label: 'Urgency Hub', id: 'dashboard', roles: ['dispatcher'], icon: (
@@ -21,10 +16,10 @@ export default function Sidebar({ activePage }: SidebarProps) {
     { href: '/stock', label: 'Stock Management', id: 'stock', roles: ['manager'], icon: (
       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
     )},
-    { href: '/loading', label: 'Loading', id: 'loading', roles: ['driver', 'dispatcher'], icon: (
+    { href: '/loading', label: 'Loading', id: 'loading', roles: ['dispatcher'], icon: (
       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
     )},
-    { href: '/trucks', label: 'Trucks', id: 'trucks', roles: ['driver', 'dispatcher'], icon: (
+    { href: '/trucks', label: 'Trucks', id: 'trucks', roles: ['driver'], icon: (
       <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1m-6-1a1 1 0 001 1h1M5 17a2 2 0 104 0m-4 0a2 2 0 114 0m6 0a2 2 0 104 0m-4 0a2 2 0 114 0" /></svg>
     )}
   ];
