@@ -1,4 +1,5 @@
 from django.db import models
+from django.contrib.auth.models import User
 
 class DeliveryPoint(models.Model):
     name = models.CharField(max_length=100, help_text="Location name")
@@ -33,3 +34,17 @@ class Order(models.Model):
 
     def __str__(self):
         return f"Order #{self.id} for {self.delivery_point.name} - {self.get_status_display()}"
+    
+class EmployeeProfile(models.Model):
+    class Role(models.TextChoices):
+        DISPATCHER = 'DISPATCHER', 'Dispatcher'
+        OPERATOR = 'OPERATOR', 'Operator'
+        MANAGER = 'MANAGER', 'Manager'
+
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
+    role = models.CharField(max_length=20, choices=Role.choices, default=Role.OPERATOR)
+    
+    workplace = models.ForeignKey(DeliveryPoint, on_delete=models.SET_NULL, null=True, blank=True)
+
+    def __str__(self):
+        return f"{self.user.username} - {self.get_role_display()}"
