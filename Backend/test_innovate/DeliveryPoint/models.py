@@ -7,6 +7,16 @@ class DeliveryPoint(models.Model):
     x_coord = models.IntegerField()
     y_coord = models.IntegerField()
 
+    class Priority(models.IntegerChoices):
+        LOW = 1, 'Low'
+        NORMAL = 2, 'Normal'
+        CRITICAL = 3, 'Critical'
+
+    priority_level = models.IntegerField(choices=Priority.choices, default=Priority.NORMAL)
+    need_name = models.CharField(max_length=100, help_text="What needed", default="")
+    need_capacity = models.IntegerField(default=0, help_text="How much needed")
+    next_delivery = models.DateTimeField(null=True, blank=True, help_text="Next delivery time")
+
     current_stock_percent = models.IntegerField(default=100, help_text="Current stock percentage (0-100)")
 
     def __str__(self):
@@ -25,6 +35,9 @@ class Order(models.Model):
         FULFILLED = 'FULFILLED', 'Fulfilled'
 
     delivery_point = models.ForeignKey(DeliveryPoint, on_delete=models.CASCADE, related_name='orders')
+
+    priority = models.IntegerField(choices=DeliveryPoint.Priority.choices, default=DeliveryPoint.Priority.NORMAL)
+    content = models.TextField(help_text='Products description', default='')
     
     urgency_level = models.IntegerField(choices=Urgency.choices, default=Urgency.NORMAL)
     quantity = models.IntegerField(default=0, help_text="How much needed")
