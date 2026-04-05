@@ -67,7 +67,7 @@ export default function LoadingPage() {
   if (isLoading) return null;
 
   return (
-    <div className="flex h-screen bg-[#F9FAFB] text-gray-900 font-sans animate-[fadeIn_0.3s_ease-in-out]">
+    <div className="flex flex-col md:flex-row h-screen bg-[#F9FAFB] text-gray-900 font-sans animate-[fadeIn_0.3s_ease-in-out]">
       <Head><title>Loading Queue | FlexiRoute</title></Head>
 
       {/* --- SIDEBAR --- */}

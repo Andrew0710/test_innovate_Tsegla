@@ -226,7 +226,7 @@ export default function Dashboard() {
   if (isLoading) return null; // Simple loader or hide while checking auth
 
   return (
-    <div className="flex h-screen bg-[#F9FAFB] text-gray-900 font-sans">
+    <div className="flex flex-col md:flex-row h-screen bg-[#F9FAFB] text-gray-900 font-sans">
       <Head>
         <title>Dashboard | FlexiRoute</title>
       </Head>

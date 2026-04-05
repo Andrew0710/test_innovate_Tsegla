@@ -133,7 +133,7 @@ export default function StockManagement() {
   if (isLoading) return null;
 
   return (
-    <div className="flex min-h-screen bg-[#F9FAFB] text-gray-900 font-sans">
+    <div className="flex flex-col md:flex-row min-h-screen bg-[#F9FAFB] text-gray-900 font-sans">
       <Head>
         <title>Stock Management | FlexiRoute</title>
       </Head>

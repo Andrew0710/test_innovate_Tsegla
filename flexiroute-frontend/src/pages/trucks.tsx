@@ -87,7 +87,7 @@ export default function DriverInterface() {
   if (isLoading) return null;
 
   return (
-    <div className="flex h-screen bg-[#F9FAFB] text-gray-900 font-sans">
+    <div className="flex flex-col md:flex-row h-screen bg-[#F9FAFB] text-gray-900 font-sans">
       <Head><title>Trucks | FlexiRoute</title></Head>
 
       {/* --- SIDEBAR --- */}
