@@ -1,40 +1,35 @@
 from django.db import models
 
 class DeliveryPoint(models.Model):
-    class Priority(models.IntegerChoices):
-        LOW = 1, 'Low'
-        NORMAL = 2, 'Normal'
-        CRITICAL = 3, 'Critical'
-
     name = models.CharField(max_length=100, help_text="Location name")
     
     x_coord = models.IntegerField()
     y_coord = models.IntegerField()
-    
-    priority_level = models.IntegerField(choices=Priority.choices, default=Priority.NORMAL)
-    
-    need_name = models.CharField(max_length=100, help_text="What needed")
-    need_capacity = models.IntegerField(default=0, help_text="How much needed")
-    
-    next_delivery = models.DateTimeField(null=True, blank=True, help_text="Next delivery time")
+
+    current_stock_percent = models.IntegerField(default=100, help_text="Current stock percentage (0-100)")
 
     def __str__(self):
-        return f"{self.name} (Priority: {self.get_priority_level_display()})"
+        return f"{self.name} (Stock: {self.current_stock_percent}%)"
 
 
 class Order(models.Model):
-    class Priority(models.IntegerChoices):
+    class Urgency(models.IntegerChoices):
         LOW = 1, 'Low'
         NORMAL = 2, 'Normal'
         CRITICAL = 3, 'Critical'
 
+    class Status(models.TextChoices):
+        PENDING = 'PENDING', 'Pending'
+        REDIRECTED = 'REDIRECTED', 'Redirected'
+        FULFILLED = 'FULFILLED', 'Fulfilled'
+
     delivery_point = models.ForeignKey(DeliveryPoint, on_delete=models.CASCADE, related_name='orders')
-    priority = models.IntegerField(choices=Priority.choices, default=Priority.NORMAL)
     
-    # Час створення замовлення
+    urgency_level = models.IntegerField(choices=Urgency.choices, default=Urgency.NORMAL)
+    quantity = models.IntegerField(default=0, help_text="How much needed")
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    
     time = models.DateTimeField(auto_now_add=True)
-    
-    content = models.TextField(help_text="Products description")
 
     def __str__(self):
-        return f"Order #{self.id} for {self.delivery_point.name}"
+        return f"Order #{self.id} for {self.delivery_point.name} - {self.get_status_display()}"
