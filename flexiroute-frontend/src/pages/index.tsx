@@ -148,8 +148,7 @@ export default function LandingPage() {
           <div>
             <h4 className="font-extrabold text-gray-900 text-lg mb-4 sm:mb-6">Our Contacts:</h4>
             <div className="flex flex-col gap-3 sm:gap-4 text-base text-gray-600 font-medium">
-              <p className="flex items-center gap-3"><span className="text-gray-400">📞</span> +38 (096) 781 9902</p>
-              <p className="flex items-center gap-3"><span className="text-gray-400">✉️</span> teamglas@gmail.com</p>
+              <p className="flex items-center gap-3"><span className="text-gray-400">✉️</span>  tseglateam@gmail.com</p>
             </div>
           </div>
           <div>
