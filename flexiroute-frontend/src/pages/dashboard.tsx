@@ -2,86 +2,96 @@ import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useState, useEffect } from 'react';
+import Sidebar from '../components/Sidebar';
+import { api, Warehouse, Truck, DeliveryPoint } from '../lib/api';
 
-// --- ІНТЕРФЕЙСИ ---
-interface PointData {
-  id: string;
+// --- ІНТЕРФЕЙСИ (ОРИГІНАЛЬНІ) ---
+interface Point {
+  id: number;
   name: string;
-  updatedAt: string;
   units: number;
   percentage: number;
+  status: 'critical' | 'normal' | 'low';
+  updatedAt: string;
   demandRatio: string;
   score: number;
-  status: 'critical' | 'normal' | 'low';
-  address?: string; // Додано для Side Panel
-  manager?: string; // Додано для Side Panel
+  // Поля для Side Panel
+  address?: string;
+  manager?: string;
 }
 
-interface ActionData {
-  id: string;
+interface AIAction {
+  id: number;
   truckId: string;
-  waitTime: string;
   fromPoint: string;
   toPoint: string;
-  status: 'pending' | 'approving' | 'ignored' | 'approved_manual' | 'approved_auto';
-  priority: 'critical' | 'low';
+  priority: 'critical' | 'normal';
+  waitTime: string;
+  status: 'pending' | 'approving' | 'approved' | 'ignored';
 }
 
 export default function Dashboard() {
   const router = useRouter();
 
   // --- СТАНИ ---
-  const [points, setPoints] = useState<PointData[]>([]);
-  const [actions, setActions] = useState<ActionData[]>([]);
+  const [points, setPoints] = useState<Point[]>([]);
+  const [actions, setActions] = useState<AIAction[]>([
+    { id: 1, truckId: 'T-42', fromPoint: 'Warehouse Beta', toPoint: 'Point Alpha', priority: 'critical', waitTime: '4m', status: 'pending' },
+    { id: 2, truckId: 'T-09', fromPoint: 'Point Delta', toPoint: 'Point Epsilon', priority: 'normal', waitTime: '12m', status: 'pending' },
+    { id: 3, truckId: 'T-88', fromPoint: 'Central Hub', toPoint: 'Point Gamma', priority: 'normal', waitTime: '1h', status: 'pending' },
+  ]);
   const [isLoading, setIsLoading] = useState(true);
-  
-  // Стан для виділеної картки (Side Panel)
-  const [selectedPoint, setSelectedPoint] = useState<PointData | null>(null);
+  const [selectedPoint, setSelectedPoint] = useState<Point | null>(null);
 
-  // --- ЗАХИСТ МАРШРУТУ ---
+  // --- ЗАХИСТ МАРШРУТУ (ЛОГІКА ЯКУ ТРЕБА ЗАЛИШИТИ) ---
   useEffect(() => {
     const isAuthenticated = localStorage.getItem('isAuthenticated');
-    if (!isAuthenticated) {
+    const userRole = localStorage.getItem('userRole');
+    if (!isAuthenticated || userRole !== 'dispatcher') {
       router.push('/login');
     }
   }, [router]);
 
-  // --- ЗАВАНТАЖЕННЯ ДАНИХ ---
+  // --- ЗАВАНТАЖЕННЯ ДАНИХ (ІНТЕГРАЦІЯ З БЕКЕНДОМ) ---
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setPoints([
-        { id: '1', name: 'Point Delta', address: 'Riverside Ave 12', manager: 'John Doe', updatedAt: '10h 22m ago', units: 8, percentage: 5, demandRatio: '2.7%', score: 19.1, status: 'critical' },
-        { id: '2', name: 'Point Alpha', address: 'City Centre, Block B', manager: 'Jane Smith', updatedAt: '10h 22m ago', units: 12, percentage: 2, demandRatio: '2.4%', score: 18.1, status: 'critical' },
-        { id: '3', name: 'Point Beta', address: 'Industrial Zone 4', manager: 'Mike Ross', updatedAt: '5h 22m ago', units: 45, percentage: 11, demandRatio: '11%', score: 9.1, status: 'normal' },
-      ]);
-      setActions([
-        { id: 'a1', truckId: 'T-42', waitTime: '3h waiting', fromPoint: 'Point Beta', toPoint: 'Point Alpha', status: 'pending', priority: 'critical' },
-        { id: 'a2', truckId: 'T-09', waitTime: '2h waiting', fromPoint: 'Point Gamma', toPoint: 'Point Delta', status: 'pending', priority: 'critical' },
-        { id: 'a3', truckId: 'T-51', waitTime: '1h waiting', fromPoint: 'Point Gamma', toPoint: 'Point Zeta', status: 'pending', priority: 'low' },
-      ]);
-      setIsLoading(false);
-    }, 500);
-    return () => clearTimeout(timer);
+    async function fetchData() {
+      try {
+        const dData = await api.getDeliveryPoints();
+        const mappedPoints: Point[] = dData.map(p => ({
+          id: p.id,
+          name: p.name,
+          units: p.need_capacity,
+          percentage: 85, // Mock percentage for original UI design
+          status: p.priority_level === 3 ? 'critical' : p.priority_level === 2 ? 'normal' : 'low',
+          updatedAt: 'Now',
+          demandRatio: 'High',
+          score: 8.4,
+          address: 'Main St, 12, Lviv',
+          manager: 'Ivan Ivanov'
+        }));
+        setPoints(mappedPoints);
+      } catch (error) {
+        console.error("Failed to fetch dashboard data:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    fetchData();
   }, []);
 
-  // --- ЛОГІКА AI ACTION LIST ---
-  const handleApprove = (id: string) => {
+  // --- ЛОГІКА AI ACTIONS ---
+  const handleApprove = (id: number) => {
     setActions(prev => prev.map(a => a.id === id ? { ...a, status: 'approving' } : a));
     setTimeout(() => {
-      setActions(prev => prev.filter(a => a.id !== id));
-    }, 600);
+      setActions(prev => prev.map(a => a.id === id ? { ...a, status: 'approved' } : a));
+    }, 1000);
   };
 
-  const handleIgnore = (id: string) => {
-    setActions(prev => {
-      const target = prev.find(a => a.id === id);
-      if (!target) return prev;
-      const others = prev.filter(a => a.id !== id);
-      return [...others, { ...target, status: 'ignored' }];
-    });
+  const handleIgnore = (id: number) => {
+    setActions(prev => prev.map(a => a.id === id ? { ...a, status: 'ignored' } : a));
   };
 
-  // --- УТИЛІТИ ---
+  // --- УТИЛІТИ ДЛЯ КОЛЬОРІВ (ОРИГІНАЛЬНІ) ---
   const getStatusColors = (status: string) => {
     switch (status) {
       case 'critical': return { border: 'border-[#DA291C]/40', dot: 'bg-[#DA291C]', bg: 'bg-[#DA291C]/5' };
@@ -91,79 +101,54 @@ export default function Dashboard() {
     }
   };
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#F7F7F9]">
-        <div className="animate-spin w-10 h-10 border-4 border-[#DA291C] border-t-transparent rounded-full"></div>
-      </div>
-    );
-  }
+  if (isLoading) return null; // Simple loader or hide while checking auth
 
   return (
-    <div className="flex h-screen bg-[#F7F7F9] text-gray-900 font-sans overflow-hidden animate-fade-in relative">
-      <Head><title>Urgency Hub | FlexiRoute</title></Head>
+    <div className="flex h-screen bg-[#F9FAFB] text-gray-900 font-sans">
+      <Head>
+        <title>Dashboard | FlexiRoute</title>
+      </Head>
 
       {/* --- SIDEBAR --- */}
-      <aside className="w-64 bg-[#1E1E1E] text-white flex flex-col justify-between shrink-0 z-20 shadow-2xl">
-        <div>
-          <div className="p-8 pb-12">
-            <span className="text-2xl font-black tracking-tighter">Flexi<span className="text-[#DA291C]">R</span>oute</span>
-          </div>
-          <nav className="flex flex-col gap-2 px-4">
-            <Link href="/dashboard" className="flex items-center gap-3 px-4 py-3 rounded-xl bg-white/10 font-bold transition-all hover:bg-white/20">
-              <svg className="w-5 h-5 text-[#DA291C]" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-              Urgency Hub
-            </Link>
-          </nav>
-        </div>
-        <div 
-          className="p-6 border-t border-gray-700 cursor-pointer hover:bg-white/5 transition-colors flex items-center gap-3" 
-          onClick={() => { localStorage.removeItem('isAuthenticated'); router.push('/login'); }}
-        >
-          <svg className="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
-          <span className="font-medium">Log Out</span>
-        </div>
-      </aside>
+      <Sidebar activePage="dashboard" />
 
-      {/* --- MAIN CONTENT --- */}
-      <main className="flex-1 flex flex-col overflow-y-auto p-6 md:p-10 lg:p-12 w-full relative">
-        
-        {/* Header */}
-        <div className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      {/* --- MAIN CONTENT (ОРИГІНАЛЬНИЙ) --- */}
+      <main className="flex-1 overflow-y-auto p-6 md:p-10 lg:p-16">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-10 gap-4">
           <div>
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-200 rounded-full text-xs font-bold text-gray-700 mb-3 shadow-sm">
+            <div className="inline-flex items-center gap-2 px-3 py-1 bg-white border border-gray-200 rounded-full text-xs font-bold text-gray-600 mb-2 shadow-sm">
               <span className="relative flex h-2 w-2"><span className="animate-ping absolute h-full w-full rounded-full bg-green-400 opacity-75"></span><span className="relative rounded-full h-2 w-2 bg-green-500"></span></span>
-              System Live
+              Active Monitoring
             </div>
-            <h1 className="text-4xl font-extrabold tracking-tight">Urgency Hub</h1>
+            <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight">Main Dashboard</h1>
+          </div>
+          <div className="flex gap-3">
+             <div className="bg-white border-2 border-gray-100 rounded-2xl px-6 py-3 flex flex-col items-end">
+               <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none mb-1">Fleet Connected</span>
+               <span className="text-xl font-black text-gray-900 leading-none">12 Trucks</span>
+             </div>
           </div>
         </div>
 
-        <div className="flex flex-col xl:flex-row gap-8 items-start relative">
+        <div className="flex flex-col xl:flex-row gap-8 items-start">
           
           {/* LEFT COLUMN (Map + Cards) */}
           <div className="flex-1 w-full flex flex-col gap-8">
             
-            {/* Interactive Map Placeholder */}
-            <div className="w-full h-[320px] bg-white border border-gray-200 rounded-[32px] overflow-hidden relative shadow-sm group">
-              <div className="absolute inset-0 bg-[#f0f2f5] opacity-50" style={{ backgroundImage: 'radial-gradient(#d1d5db 2px, transparent 2px)', backgroundSize: '30px 30px' }}></div>
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-gray-400 font-bold uppercase tracking-widest text-sm">Interactive Map Base</div>
+            {/* Map Section (Original Design) */}
+            <div className="w-full h-[400px] bg-white border border-gray-200 rounded-[32px] overflow-hidden relative shadow-sm group">
+              <div className="absolute inset-0 bg-[#f0f2f5] opacity-50" style={{ backgroundImage: 'radial-gradient(#d1d5db 1px, transparent 1px)', backgroundSize: '40px 40px' }}></div>
               
-              {/* Tooltip Truck Example (Дизайнерська вимога) */}
-              <div className="absolute top-[30%] left-[20%] group/truck cursor-pointer">
-                <div className="w-8 h-8 bg-gray-900 rounded-lg flex items-center justify-center shadow-lg hover:scale-110 transition-transform">
-                  <span className="text-white text-xs">🚚</span>
-                </div>
-                {/* Tooltip */}
-                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 bg-gray-900 text-white text-xs rounded-xl p-3 opacity-0 group-hover/truck:opacity-100 transition-opacity pointer-events-none shadow-xl z-10">
-                  <p className="font-bold mb-1 text-[#DA291C]">Truck T-42</p>
-                  <p className="text-gray-300">Fuel: 45% remaining</p>
-                  <p className="text-gray-300">Order: Point Alpha (Critical)</p>
-                  <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
+              <div className="absolute top-10 left-10 z-10">
+                <div className="bg-white/80 backdrop-blur-md p-6 rounded-2xl shadow-xl border border-gray-100 max-w-[200px]">
+                  <p className="text-[10px] font-black text-gray-400 uppercase mb-2">Live Activity</p>
+                  <p className="text-xs font-bold text-gray-900 leading-relaxed">High demand detected in <span className="text-[#DA291C]">Central District</span></p>
                 </div>
               </div>
 
-              {/* Critical Point Example */}
+              {/* Static dots as in original design */}
+              <div className="absolute top-[40%] left-[30%] w-6 h-6 bg-gray-900 rounded-full border-4 border-white shadow-lg cursor-pointer hover:scale-125 transition-transform"></div>
+              <div className="absolute top-[25%] left-[55%] w-6 h-6 bg-gray-900 rounded-full border-4 border-white shadow-lg cursor-pointer hover:scale-125 transition-transform"></div>
               <div className="absolute top-[60%] left-[60%] w-6 h-6 bg-[#DA291C] rounded-full border-4 border-white shadow-lg animate-pulse cursor-pointer hover:scale-125 transition-transform"></div>
             </div>
 
@@ -250,8 +235,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* --- SIDE PANEL (Деталі картки) --- */}
-        {/* Відкривається, коли клікаєш на картку (selectedPoint) */}
+        {/* --- SIDE PANEL --- */}
         <div className={`fixed top-0 right-0 h-full w-full sm:w-[450px] bg-white shadow-[-20px_0_40px_rgba(0,0,0,0.1)] z-50 transform transition-transform duration-300 ${selectedPoint ? 'translate-x-0' : 'translate-x-full'}`}>
           {selectedPoint && (
             <div className="p-8 flex flex-col h-full">
@@ -277,7 +261,6 @@ export default function Dashboard() {
             </div>
           )}
         </div>
-        {/* Темний фон для Side Panel */}
         {selectedPoint && (
           <div className="fixed inset-0 bg-black/20 z-40" onClick={() => setSelectedPoint(null)}></div>
         )}

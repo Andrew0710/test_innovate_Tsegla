@@ -1,8 +1,24 @@
 import Head from 'next/head';
-import Link from 'next/link';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/router';
+import Sidebar from '../components/Sidebar';
 
 export default function LoadingPage() {
+  const router = useRouter();
+  const [isLoading, setIsLoading] = useState(true);
+
+  // --- ЗАХИСТ МАРШРУТУ ---
+  useEffect(() => {
+    const isAuthenticated = localStorage.getItem('isAuthenticated');
+    const userRole = localStorage.getItem('userRole');
+    // Loading is only for drivers and dispatchers
+    if (!isAuthenticated || (userRole !== 'driver' && userRole !== 'dispatcher')) {
+      router.push('/login');
+    } else {
+      setIsLoading(false);
+    }
+  }, [router]);
+
   // --- СТАНИ ФОРМИ ---
   const [quantity, setQuantity] = useState(0);
   const [selectedPoint, setSelectedPoint] = useState('delta');
@@ -21,42 +37,18 @@ export default function LoadingPage() {
     setTimeout(() => {
       setIsSubmitting(false);
       setQuantity(0);
-      alert('Loading confirmed successfully!'); // Тут можна додати Toast, як на сторінці Stock
+      alert('Loading confirmed successfully!');
     }, 1000);
   };
+
+  if (isLoading) return null;
 
   return (
     <div className="flex h-screen bg-[#F9FAFB] text-gray-900 font-sans animate-[fadeIn_0.3s_ease-in-out]">
       <Head><title>New Loading | FlexiRoute</title></Head>
 
       {/* --- SIDEBAR --- */}
-      <aside className="hidden md:flex w-64 bg-[#1A1A1A] text-white flex-col justify-between shrink-0 z-20 shadow-xl">
-        <div>
-          <div className="p-8 pb-12">
-            <span className="text-2xl font-black tracking-tighter">Flexi<span className="text-[#DA291C]">R</span>oute</span>
-          </div>
-          <nav className="flex flex-col gap-2 px-4">
-            <Link href="/dashboard" className="flex items-center gap-4 px-4 py-3 rounded-xl text-gray-400 hover:text-white hover:bg-white/5 font-medium transition-all">
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>
-              Urgency Hub
-            </Link>
-            <Link href="/stock" className="flex items-center gap-4 px-4 py-3 rounded-xl text-gray-400 hover:text-white hover:bg-white/5 font-medium transition-all">
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
-              Stock Management
-            </Link>
-            {/* Активний пункт меню (Loading) */}
-            <Link href="/loading" className="flex items-center gap-4 px-4 py-3 rounded-xl text-white font-bold transition-all relative">
-              <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-white rounded-r-md"></div>
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
-              Loading
-            </Link>
-            <Link href="/trucks" className="flex items-center gap-4 px-4 py-3 rounded-xl text-gray-400 hover:text-white hover:bg-white/5 font-medium transition-all">
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1m-6-1a1 1 0 001 1h1M5 17a2 2 0 104 0m-4 0a2 2 0 114 0m6 0a2 2 0 104 0m-4 0a2 2 0 114 0" /></svg>
-              Trucks
-            </Link>
-          </nav>
-        </div>
-      </aside>
+      <Sidebar activePage="loading" />
 
       {/* --- MAIN CONTENT --- */}
       <main className="flex-1 overflow-y-auto p-6 md:p-12 lg:p-16">
@@ -81,7 +73,7 @@ export default function LoadingPage() {
               <h2 className="text-2xl font-bold text-gray-900 mb-6">Select Product</h2>
               <div className="flex flex-col sm:flex-row gap-4 sm:items-center">
                 
-                {/* Custom Dropdown (Стилізований під макет) */}
+                {/* Custom Dropdown */}
                 <div className="relative flex-1">
                   <select className="w-full bg-white border border-gray-100 shadow-sm rounded-3xl p-5 text-gray-500 font-medium text-lg outline-none focus:border-[#DA291C] appearance-none cursor-pointer transition-all">
                     <option value="none">None</option>
@@ -93,7 +85,7 @@ export default function LoadingPage() {
                   </div>
                 </div>
 
-                {/* Custom Counter (- 0 +) */}
+                {/* Custom Counter */}
                 <div className="bg-gray-50 border border-gray-100 shadow-sm rounded-3xl p-2 flex items-center justify-between w-full sm:w-48 h-[68px]">
                   <button type="button" onClick={decreaseQty} className="w-12 h-12 flex items-center justify-center text-gray-500 hover:bg-gray-200 rounded-2xl transition-colors font-bold text-xl">-</button>
                   <span className="font-bold text-gray-900 text-lg w-12 text-center">{quantity}</span>
@@ -102,12 +94,12 @@ export default function LoadingPage() {
               </div>
             </div>
 
-            {/* SELECT DELIVERY POINT (Кастомні картки) */}
+            {/* SELECT DELIVERY POINT */}
             <div>
               <h2 className="text-2xl font-bold text-gray-900 mb-6">Select Delivery Point</h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 
-                {/* Point Delta (Red) */}
+                {/* Point Delta */}
                 <label className="cursor-pointer group relative">
                   <input type="radio" name="point" value="delta" checked={selectedPoint === 'delta'} onChange={() => setSelectedPoint('delta')} className="peer hidden" />
                   <div className="bg-white px-6 py-6 rounded-[24px] border-2 border-gray-100 text-gray-900 font-medium peer-checked:border-[#DA291C] peer-checked:bg-red-50 transition-all flex items-center justify-center gap-4 hover:border-red-200 shadow-sm">
@@ -115,7 +107,7 @@ export default function LoadingPage() {
                   </div>
                 </label>
 
-                {/* Point Alpha (Yellow) */}
+                {/* Point Alpha */}
                 <label className="cursor-pointer group relative">
                   <input type="radio" name="point" value="alpha" checked={selectedPoint === 'alpha'} onChange={() => setSelectedPoint('alpha')} className="peer hidden" />
                   <div className="bg-white px-6 py-6 rounded-[24px] border-2 border-gray-100 text-gray-900 font-medium peer-checked:border-[#FBBF24] peer-checked:bg-yellow-50 transition-all flex items-center justify-center gap-4 hover:border-yellow-200 shadow-sm">
@@ -123,7 +115,7 @@ export default function LoadingPage() {
                   </div>
                 </label>
 
-                {/* Point Beta (Green) */}
+                {/* Point Beta */}
                 <label className="cursor-pointer group relative">
                   <input type="radio" name="point" value="beta" checked={selectedPoint === 'beta'} onChange={() => setSelectedPoint('beta')} className="peer hidden" />
                   <div className="bg-white px-6 py-6 rounded-[24px] border-2 border-gray-100 text-gray-900 font-medium peer-checked:border-[#A3E635] peer-checked:bg-[#A3E635]/10 transition-all flex items-center justify-center gap-4 hover:border-[#A3E635]/50 shadow-sm">
@@ -131,7 +123,7 @@ export default function LoadingPage() {
                   </div>
                 </label>
 
-                {/* Point Gamma (Green) */}
+                {/* Point Gamma */}
                 <label className="cursor-pointer group relative">
                   <input type="radio" name="point" value="gamma" checked={selectedPoint === 'gamma'} onChange={() => setSelectedPoint('gamma')} className="peer hidden" />
                   <div className="bg-white px-6 py-6 rounded-[24px] border-2 border-gray-100 text-gray-900 font-medium peer-checked:border-[#A3E635] peer-checked:bg-[#A3E635]/10 transition-all flex items-center justify-center gap-4 hover:border-[#A3E635]/50 shadow-sm">
@@ -150,7 +142,7 @@ export default function LoadingPage() {
                 className={`w-full font-bold py-6 rounded-[28px] transition-all flex items-center justify-center gap-3 text-xl shadow-sm
                   ${quantity > 0 
                     ? 'bg-[#DA291C] hover:bg-red-700 text-white shadow-lg shadow-red-500/30 active:scale-[0.98]' 
-                    : 'bg-[#E5A5A4] text-white/90 cursor-not-allowed' // Колір як на макеті для неактивного стану
+                    : 'bg-[#E5A5A4] text-white/90 cursor-not-allowed'
                   }`}
               >
                 {isSubmitting ? (
